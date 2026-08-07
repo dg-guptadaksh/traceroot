@@ -964,11 +964,45 @@ function ScorerRequires({ requiredInputs }: { requiredInputs: string[] | null })
 
 /** Labeled value inside a card — a muted caption over the value, for cards that
  *  hold several small fields (Config, Usage) rather than one big one. */
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+/** A label→value row (label left, value right), for short scalar config fields. Sits in a
+ *  `divide-y` list inside a flush ScorerCard, matching the detector panel's row sections. */
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[11px] text-muted-foreground">{label}</span>
-      <span className="text-[13px]">{children}</span>
+    <div className="flex items-baseline justify-between gap-4 px-3 py-2">
+      <span className="shrink-0 text-[12px] text-muted-foreground">{label}</span>
+      <span className="min-w-0 text-right text-[12px]">{children}</span>
+    </div>
+  );
+}
+
+/** A full-width label-above-value block, for long values (description, metadata JSON). */
+function DetailBlock({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="px-3 py-2">
+      <div className="mb-1 text-[11px] text-muted-foreground">{label}</div>
+      <div className="text-[12px]">{children}</div>
+    </div>
+  );
+}
+
+/** A usage stat tile — a big number over a small label, laid out in a hairline grid. */
+function Stat({
+  label,
+  value,
+  small,
+  tone,
+}: {
+  label: string;
+  value: React.ReactNode;
+  small?: boolean;
+  tone?: string;
+}) {
+  return (
+    <div className="bg-background p-3">
+      <div className={cn("font-semibold tabular-nums", small ? "text-[12px]" : "text-[15px]", tone)}>
+        {value}
+      </div>
+      <div className="mt-0.5 text-[11px] text-muted-foreground">{label}</div>
     </div>
   );
 }
@@ -977,10 +1011,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function ScorerCard({
   title,
   action,
+  flush,
   children,
 }: {
   title: string;
   action?: React.ReactNode;
+  /** Drop the inner padding so a `divide-y` row list / stat grid runs edge to edge. */
+  flush?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -989,7 +1026,7 @@ function ScorerCard({
         <span className="text-[12px] font-medium text-muted-foreground">{title}</span>
         {action}
       </div>
-      <div className="p-3">{children}</div>
+      <div className={flush ? "" : "p-3"}>{children}</div>
     </div>
   );
 }
@@ -1210,53 +1247,57 @@ function ScorerDetail({
       {/* Config — the scorer's declared shape, independent of how it's been used:
           output type, the direction a comparison should read a delta as an
           improvement, free-form description, and any SDK-attached metadata. */}
-      <ScorerCard title="Config">
-        <div className="flex flex-col gap-2">
-          <Field label="Output type">
+      <ScorerCard title="Config" flush>
+        <div className="divide-y divide-border">
+          <DetailRow label="Output type">
             {scorer.outputType ? OUTPUT_TYPE_LABEL[scorer.outputType] : <NotProvided />}
-          </Field>
-          <Field label="Direction">
+          </DetailRow>
+          <DetailRow label="Direction">
             {scorer.direction ? DIRECTION_LABEL[scorer.direction] : <NotProvided />}
-          </Field>
-          <Field label="Description">{scorer.description ?? <NotProvided />}</Field>
-          <Field label="Requires">
+          </DetailRow>
+          <DetailRow label="Requires">
             <ScorerRequires requiredInputs={scorer.requiredInputs} />
-          </Field>
-          <Field label="Metadata">
+          </DetailRow>
+          <DetailBlock label="Description">{scorer.description ?? <NotProvided />}</DetailBlock>
+          <DetailBlock label="Metadata">
             {scorer.metadata != null ? (
-              <pre className="whitespace-pre-wrap break-all font-mono text-[11px]">
+              <pre className="overflow-auto whitespace-pre-wrap break-all rounded border border-border bg-muted/30 p-2 font-mono text-[11px] leading-relaxed">
                 {JSON.stringify(scorer.metadata, null, 2)}
               </pre>
             ) : (
               <NotProvided />
             )}
-          </Field>
+          </DetailBlock>
         </div>
       </ScorerCard>
 
       {/* Usage — observed from reported runs. For an undeclared scorer this is the
           only thing there is to show, and it's useful context for every scorer. */}
-      <ScorerCard title="Usage">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Field label="Evaluations">{scorer.evaluationCount}</Field>
-          <Field label="Runs">{scorer.runCount}</Field>
-          <Field label="Scores">{scorer.scoreCount.toLocaleString("en-US")}</Field>
-          <Field label="Pass rate">
-            {scorer.passRate === null ? <NotProvided /> : `${(scorer.passRate * 100).toFixed(1)}%`}
-          </Field>
-          <Field label="Error rate">
-            {scorer.errorRate > 0 ? (
-              <span className={SENTIMENT_CLASS.bad}>{(scorer.errorRate * 100).toFixed(1)}%</span>
-            ) : (
-              "0%"
-            )}
-          </Field>
-          <Field label="Last used">
-            {scorer.lastUsed ? <Timestamp iso={scorer.lastUsed} /> : <NotProvided />}
-          </Field>
+      <ScorerCard title="Usage" flush>
+        {/* Hairline stat grid — gap-px over a border bg draws the thin separators. */}
+        <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-3">
+          <Stat label="Evaluations" value={scorer.evaluationCount} />
+          <Stat label="Runs" value={scorer.runCount} />
+          <Stat label="Scores" value={scorer.scoreCount.toLocaleString("en-US")} />
+          <Stat
+            label="Pass rate"
+            value={
+              scorer.passRate === null ? <NotProvided /> : `${(scorer.passRate * 100).toFixed(1)}%`
+            }
+          />
+          <Stat
+            label="Error rate"
+            tone={scorer.errorRate > 0 ? SENTIMENT_CLASS.bad : undefined}
+            value={scorer.errorRate > 0 ? `${(scorer.errorRate * 100).toFixed(1)}%` : "0%"}
+          />
+          <Stat
+            label="Last used"
+            small
+            value={scorer.lastUsed ? <Timestamp iso={scorer.lastUsed} /> : <NotProvided />}
+          />
         </div>
         {scorer.recentErrors.length > 0 && (
-          <div className="mt-3 flex flex-col gap-1 border-t border-border pt-2">
+          <div className="flex flex-col gap-1 border-t border-border p-3">
             <span className="text-[11px] font-medium text-muted-foreground">Recent errors</span>
             {scorer.recentErrors.map((e, i) => (
               <div key={i} className="text-[11px] text-muted-foreground">
