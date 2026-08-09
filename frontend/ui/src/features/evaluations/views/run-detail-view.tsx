@@ -68,6 +68,7 @@ import {
 import type {
   ResultRow,
   RunDetail,
+  RunProvenance,
   ScoreRow,
   Classification,
   CompareResultRow,
@@ -984,6 +985,10 @@ function RunBody({
             <Badge variant="foreground" className="font-mono text-[11px]">
               {run.candidateVersion}
             </Badge>
+            {/* Provenance — SDK language is the visible cross-language signal (Python vs
+                TypeScript for the SAME evaluation); git/model/CI detail sits in the popover.
+                Kept out of the evaluation NAME so language never fragments the identity. */}
+            <ProvenanceChip provenance={run.provenance} />
             <span className="font-mono text-xs font-normal text-muted-foreground">{run.id}</span>
             <CopyButton
               value={run.id}
@@ -1175,6 +1180,66 @@ function RunBody({
       </div>
 
     </>
+  );
+}
+
+const SDK_LANGUAGE_LABEL: Record<string, string> = {
+  python: "Python",
+  typescript: "TypeScript",
+};
+
+/**
+ * Run provenance — SDK language/version, git and CI identity — as a compact chip whose
+ * label is the SDK language (the visible signal that a Python and a TypeScript run belong
+ * to the SAME evaluation). Details open in a popover so language/code identity is
+ * discoverable without ever entering the evaluation's display name. Null when the SDK
+ * reported nothing.
+ */
+function ProvenanceChip({ provenance }: { provenance: RunProvenance | null }) {
+  if (!provenance) return null;
+  const lang = provenance.sdk_language ?? undefined;
+  const langLabel = lang ? (SDK_LANGUAGE_LABEL[lang] ?? lang) : null;
+  const rows: Array<[string, string]> = [];
+  if (langLabel) {
+    rows.push(["SDK", langLabel + (provenance.sdk_version ? ` ${provenance.sdk_version}` : "")]);
+  }
+  if (provenance.declared_model) rows.push(["Model", provenance.declared_model]);
+  if (provenance.declared_prompt_version) rows.push(["Prompt", provenance.declared_prompt_version]);
+  if (provenance.git_commit) {
+    rows.push(["Commit", provenance.git_commit.slice(0, 10) + (provenance.git_dirty ? " (dirty)" : "")]);
+  }
+  if (provenance.git_ref) rows.push(["Ref", provenance.git_ref]);
+  if (provenance.ci_provider) {
+    rows.push(["CI", provenance.ci_provider + (provenance.ci_build_id ? ` #${provenance.ci_build_id}` : "")]);
+  }
+  if (rows.length === 0) return null;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          title="Run provenance (SDK, git, CI)"
+        >
+          {langLabel ?? "Provenance"}
+          <ChevronDown className="h-3 w-3" aria-hidden />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-2">
+        <div className="mb-1 px-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+          Provenance
+        </div>
+        <div className="flex flex-col gap-1">
+          {rows.map(([k, v]) => (
+            <div key={k} className="flex items-baseline justify-between gap-3 px-1 text-[12px]">
+              <span className="shrink-0 text-muted-foreground">{k}</span>
+              <span className="min-w-0 truncate text-right font-mono text-[11px]">{v}</span>
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

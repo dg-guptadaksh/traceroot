@@ -83,6 +83,18 @@ const RUN = {
   errorCount: 0,
   baselineComparable: false,
   elapsedMs: 360000,
+  provenance: {
+    git_repository: null,
+    git_ref: null,
+    git_commit: "4a91c02deadbeef",
+    git_dirty: false,
+    ci_provider: null,
+    ci_build_id: null,
+    sdk_language: "python",
+    sdk_version: "0.5.0",
+    declared_model: "claude-opus-4",
+    declared_prompt_version: null,
+  },
   comparison: {
     available: false,
     trustworthy: false,
@@ -220,5 +232,15 @@ describe("result → real trace", () => {
     stubFetch(makeResult("trace-1"));
     mount();
     expect(await screen.findByText(/1\/1 passed/)).toBeDefined();
+  });
+
+  it("surfaces the run's SDK language as a provenance chip in the header", async () => {
+    stubFetch(makeResult("trace-1"));
+    mount();
+    // The chip's label IS the SDK language (Python vs TypeScript for the same evaluation),
+    // rendered inline — provenance is discoverable without touching the evaluation name.
+    expect(await screen.findByText("Python")).toBeDefined();
+    // The evaluation name is unchanged (language never enters the identity label).
+    expect(screen.getByText("Billing routing")).toBeDefined();
   });
 });
