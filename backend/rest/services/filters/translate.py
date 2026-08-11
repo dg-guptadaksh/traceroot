@@ -377,6 +377,20 @@ def _keyed_metadata_condition(idx: int, col: FilterColumn, pred: Predicate, para
     scan; only the span half is a semi-join, and it takes the same deduped, project-scoped,
     lower-bounded scan every other span-level predicate takes (``_span_semijoin``).
 
+    Note the two halves do NOT share staleness semantics. The span half runs after its scan
+    dedups, so it only ever sees a span's latest version. The trace half lands in the same WHERE
+    as the trace list's ``LIMIT 1 BY``, which applies after it, so the predicate is tested
+    against every ReplacingMergeTree version of a trace row and the dedup then keeps the newest
+    one that matched -- a superseded version can hold a trace in the result. That is the existing
+    behaviour of every inline trace filter (name, user_id, search), and it is left alone here on
+    purpose. The write path only ever grows a trace's map from empty to populated, since a batch
+    without the root span carries no metadata at all and a later batch rewrites the whole row, and
+    ``mapContains`` makes an empty map match neither whitelisted operator -- so the normal path
+    produces no stale match in either direction. Hoisting this predicate above the dedup to close
+    the remaining cases would make the version sort process every trace in the project window
+    instead of the matching subset, in both the page and the count query, and would leave one
+    condition in the WHERE with different semantics from the inline filters beside it.
+
     Both the key AND the value bind as parameters — the key is data, not an identifier — which
     is what makes an arbitrary user-typed key safe without registry membership. Each binds ONCE
     and both halves reference the same name, so the two can never compare different values. The
